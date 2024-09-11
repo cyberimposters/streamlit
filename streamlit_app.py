@@ -29,11 +29,27 @@ def fetch_nvd_data(url):
                     cve = cve_link.text.strip()
                     cols.insert(0, cve)
 
-                if len(cols) != num_cols + 1:
-                    st.warning(f"Skipping row with unexpected number of columns: {len(cols)} (expected {num_cols + 1})")
+                    # Fetch affected versions from the detail page
+                    detail_url = 'https://nvd.nist.gov' + cve_link['href']
+                    detail_response = requests.get(detail_url)
+                    detail_response.raise_for_status()
+                    detail_soup = BeautifulSoup(detail_response.content, 'html.parser')
+
+                    # Extract affected versions (REPLACE THIS WITH ACTUAL CODE)
+                    affected_versions_section = detail_soup.find('div', id='vulnConfigurationsDiv')  # Adjust if needed
+                    if affected_versions_section:
+                        affected_versions = affected_versions_section.find_all('a', {'data-testid': 'vuln-configuration-cpe-link'})  # Adjust if needed
+                        affected_versions = [version.text.strip() for version in affected_versions]
+                        cols.append(', '.join(affected_versions))
+                    else:
+                        cols.append('N/A')
+
+                if len(cols) != num_cols + 2:
+                    st.warning(f"Skipping row with unexpected number of columns: {len(cols)} (expected {num_cols + 2})")
                     continue
                 data.append([ele for ele in cols if ele])
 
+            headers.append('Affected Versions')
             df = pd.DataFrame(data, columns=headers)
 
         else:
@@ -43,8 +59,23 @@ def fetch_nvd_data(url):
                 summary = vuln_detail.find('p', {'data-testid': 'vuln-summary-0'}).text.strip()
                 cvss_severity = vuln_detail.find('td', nowrap="nowrap").text.strip().replace('\n', ' ')
 
-                data = [[cve, summary, cvss_severity]]
-                headers = ['CVE', 'Summary', 'CVSS Severity']
+                # Fetch affected versions from the detail page (for single result)
+                detail_url = 'https://nvd.nist.gov' + vuln_detail.find('a', {'data-testid': 'vuln-detail-link-0'})['href']
+                detail_response = requests.get(detail_url)
+                detail_response.raise_for_status()
+                detail_soup = BeautifulSoup(detail_response.content, 'html.parser')
+
+                # Extract affected versions (REPLACE THIS WITH ACTUAL CODE)
+                affected_versions_section = detail_soup.find('div', id='vulnConfigurationsDiv')  # Adjust if needed
+                if affected_versions_section:
+                    affected_versions = affected_versions_section.find_all('a', {'data-testid': 'vuln-configuration-cpe-link'})  # Adjust if needed
+                    affected_versions = [version.text.strip() for version in affected_versions]
+                    affected_versions_str = ', '.join(affected_versions)
+                else:
+                    affected_versions_str = 'N/A'
+
+                data = [[cve, summary, cvss_severity, affected_versions_str]]
+                headers = ['CVE', 'Summary', 'CVSS Severity', 'Affected Versions']
                 df = pd.DataFrame(data, columns=headers)
             else:
                 st.error("No vulnerability details found on the page.")
@@ -75,8 +106,18 @@ st.title('NVD Vulnerability Search Results')
 # URLs to fetch data from (all pages)
 urls = [
     'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=0',
-    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=20'
-    # Add more URLs as needed
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=20',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=40',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=60',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=80',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=0',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=20',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=40',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=60',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=logstash&results_type=overview&form_type=Basic&search_type=all&startIndex=0',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=logstash&results_type=overview&form_type=Basic&search_type=all&startIndex=20',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=Oracle+GraalVM+for+JDK&results_type=overview&form_type=Basic&search_type=all&queryType=phrase&startIndex=0',
+    'https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=Oracle+GraalVM+for+JDK&results_type=overview&form_type=Basic&search_type=all&queryType=phrase&startIndex=20'
 ]
 
 # Fetch and combine data from all URLs
@@ -91,4 +132,3 @@ if not all_data.empty:
     st.dataframe(all_data)
 else:
     st.error("No data found. Please check the URLs or the NVD website structure.")
-
