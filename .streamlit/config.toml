@@ -1,0 +1,9 @@
+[server]
+headless = true
+enableCORS = false
+
+[theme]
+base="light"  # This sets the app to light mode
+
+[layout]
+wide = true  # This enables wide mode for the app
