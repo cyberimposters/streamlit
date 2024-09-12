@@ -93,7 +93,7 @@ if search_term:
     st.dataframe(filtered_data)
 
 # Add functionality to view more details when a row is clicked (Updated)
-#selected_row = st.data_editor(all_data, num_rows="dynamic")
+selected_row = st.data_editor(all_data, num_rows="dynamic")
 #if selected_row:
 #    vuln_id = selected_row['Vuln ID']
 #    details = get_cve_details(vuln_id)
