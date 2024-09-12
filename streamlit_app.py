@@ -25,12 +25,26 @@ def scrape_nvd_page(url):
             cvss_severity = cols[1].text.strip()
 
             # Extract affected versions using regex
-            affected_versions_match = re.findall(r'\d{1}[.]\d{1,2}[.]\d{1,2}', summary)
+            affected_versions_match = re.findall(r'\d{1}[.]\d{1,2}[.]\d{1,2}|\d{2}[.]\d{1}[.]\d{1}', summary)  # Updated regex pattern
             affected_versions = ', '.join(affected_versions_match) if affected_versions_match else None
 
-            data.append([vuln_id, summary, cvss_severity, affected_versions])
+            # Identify the software from the URL
+            if 'elasticsearch' in url.lower():
+                software = 'Elasticsearch'
+            elif 'logstash' in url.lower():
+                software = 'Logstash'
+            elif 'jdk' in url.lower():
+                software = 'Oracle JDK'
+            else:
+                software = 'Unknown'
 
-    return pd.DataFrame(data, columns=['Vuln ID', 'Summary', 'CVSS Severity', 'Affected Versions'])
+            # Extract the announcement if present
+            announcement_match = re.search(r'ESA-\d{4}-\d{1,2}', summary)
+            announcement = announcement_match.group(0) if announcement_match else None
+
+            data.append([vuln_id, summary, cvss_severity, affected_versions, software, announcement])
+
+    return pd.DataFrame(data, columns=['Vuln ID', 'Summary', 'CVSS Severity', 'Affected Versions', 'Software', 'Announcement'])
 
 def get_cve_details(vuln_id):
     url = f"https://nvd.nist.gov/vuln/detail/{vuln_id}"
