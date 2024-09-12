@@ -35,6 +35,8 @@ def scrape_nvd_page(url):
                 software = 'Logstash'
             elif 'jdk' in url.lower():
                 software = 'Oracle JDK'
+            elif 'kibana' in url.lower():
+                software = 'Kibana'
             else:
                 software = 'Unknown'
 
