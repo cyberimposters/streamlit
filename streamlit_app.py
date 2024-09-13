@@ -3,9 +3,25 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import streamlit as st
 import re
+import concurrent.futures
+
+# Pre-compile regex patterns
+affected_versions_pattern = re.compile(r'\d{1}[.]\d{1,2}[.]\d{1,2}|\d{2}[.]\d{1}[.]\d{1}')
+announcement_pattern = re.compile(r'ESA-\d{4}-\d{1,2}')
+
+# Create a session to reuse connections
+session = requests.Session()
+
+# Software map for efficient string matching
+software_map = {
+    'elasticsearch': 'Elasticsearch',
+    'logstash': 'Logstash',
+    'jdk': 'Oracle JDK',
+    'kibana': 'Kibana'
+}
 
 def scrape_nvd_page(url):
-    response = requests.get(url)
+    response = session.get(url)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.content, 'html.parser')
@@ -24,24 +40,19 @@ def scrape_nvd_page(url):
             summary = cols[0].text.strip()
             cvss_severity = cols[1].text.strip()
 
-            # Extract affected versions using regex
-            affected_versions_match = re.findall(r'\d{1}[.]\d{1,2}[.]\d{1,2}|\d{2}[.]\d{1}[.]\d{1}', summary)  # Updated regex pattern
+            # Extract affected versions
+            affected_versions_match = affected_versions_pattern.findall(summary)
             affected_versions = ', '.join(affected_versions_match) if affected_versions_match else None
 
             # Identify the software from the URL
-            if 'elasticsearch' in url.lower():
-                software = 'Elasticsearch'
-            elif 'logstash' in url.lower():
-                software = 'Logstash'
-            elif 'jdk' in url.lower():
-                software = 'Oracle JDK'
-            elif 'kibana' in url.lower():
-                software = 'Kibana'
-            else:
-                software = 'Unknown'
+            software = 'Unknown'
+            for key, value in software_map.items():
+                if key in url.lower():
+                    software = value
+                    break
 
             # Extract the announcement if present
-            announcement_match = re.search(r'ESA-\d{4}-\d{1,2}', summary)
+            announcement_match = announcement_pattern.search(summary)
             announcement = announcement_match.group(0) if announcement_match else None
 
             data.append([vuln_id, summary, cvss_severity, affected_versions, software, announcement])
@@ -49,35 +60,40 @@ def scrape_nvd_page(url):
     return pd.DataFrame(data, columns=['Vuln ID', 'Summary', 'CVSS Severity', 'Affected Versions', 'Software', 'Announcement'])
 
 def get_cve_details(vuln_id):
-    url = f"https://nvd.nist.gov/vuln/detail/{vuln_id}"
-    response = requests.get(url)
-    response.raise_for_status()
-    soup = BeautifulSoup(response.content, 'html.parser')
-    # ... (Extract more details as needed from the CVE detail page)
-    return  # Return the extracted details
+    # Placeholder for actual logic to get CVE details
+    return {"Vuln ID": vuln_id, "Details": "CVE details placeholder"}
 
-# URLs to scrape
-urls = [
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=0",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=20",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=40",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=60",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=elasticsearch&results_type=overview&form_type=Basic&search_type=all&startIndex=80",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=0",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=20",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=40",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=kibana&results_type=overview&form_type=Basic&search_type=all&startIndex=60",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=logstash&results_type=overview&form_type=Basic&search_type=all&startIndex=0",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=logstash&results_type=overview&form_type=Basic&search_type=all&startIndex=20",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=Oracle+GraalVM+for+JDK&results_type=overview&form_type=Basic&search_type=all&queryType=phrase&startIndex=0",
-    "https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query=Oracle+GraalVM+for+JDK&results_type=overview&form_type=Basic&search_type=all&queryType=phrase&startIndex=20"
-]
+# Define the search queries and their pagination limits
+queries = {
+    "elasticsearch": 100,  # Up to startIndex 80
+    "kibana": 100,         # Up to startIndex 60
+    "logstash": 100,       # Up to startIndex 20
+    "Oracle GraalVM for JDK": 20  # Up to startIndex 20, note the phrase queryType
+}
 
-# Scrape all URLs and combine the results
-all_data = pd.DataFrame()
-for url in urls:
-    page_data = scrape_nvd_page(url)
-    all_data = pd.concat([all_data, page_data], ignore_index=True)
+# Generate URLs based on queries and pagination
+urls = []
+for query, max_index in queries.items():
+    for start_index in range(0, max_index + 1, 20):  # Iterate in steps of 20
+        url = f"https://nvd.nist.gov/vuln/search/results?isCpeNameSearch=false&query={query}&results_type=overview&form_type=Basic&search_type=all&startIndex={start_index}"
+        if " " in query:  # Add queryType=phrase for queries with spaces
+            url += "&queryType=phrase"
+        urls.append(url)
+
+# Scrape all URLs in parallel and combine the results
+def scrape_all_urls(urls):
+    all_data = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(scrape_nvd_page, url) for url in urls]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                all_data.append(future.result())
+            except Exception as e:
+                print(f"Error scraping URL: {e}")
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+
+# Fetch all data in parallel
+all_data = scrape_all_urls(urls)
 
 # Drop duplicate rows based on 'Vuln ID'
 all_data.drop_duplicates(subset=['Vuln ID'], inplace=True)
@@ -95,8 +111,9 @@ if search_term:
     st.dataframe(filtered_data)
 
 # Add functionality to view more details when a row is clicked (Updated)
-selected_row = st.data_editor(all_data, num_rows="dynamic")
-#if selected_row:
-#    vuln_id = selected_row['Vuln ID']
-#    details = get_cve_details(vuln_id)
-    # ... (Display the extracted details in Streamlit)
+selected_rows = st.data_editor(all_data, num_rows="dynamic")
+if selected_rows is not None and not selected_rows.empty:
+    selected_vuln_id = selected_rows.iloc[0]['Vuln ID']
+    details = get_cve_details(selected_vuln_id)
+    st.write(f"Details for {selected_vuln_id}:")
+    st.json(details)
