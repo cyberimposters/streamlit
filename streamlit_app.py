@@ -59,9 +59,9 @@ def scrape_nvd_page(url):
 
     return pd.DataFrame(data, columns=['Vuln ID', 'Summary', 'CVSS Severity', 'Affected Versions', 'Software', 'Announcement'])
 
-def get_cve_details(vuln_id):
-    # Placeholder for actual logic to get CVE details
-    return {"Vuln ID": vuln_id, "Details": "CVE details placeholder"}
+# def get_cve_details(vuln_id):
+#     # Placeholder for actual logic to get CVE details
+#     return {"Vuln ID": vuln_id, "Details": "CVE details placeholder"}
 
 # Define the search queries and their pagination limits
 queries = {
@@ -98,22 +98,39 @@ all_data = scrape_all_urls(urls)
 # Drop duplicate rows based on 'Vuln ID'
 all_data.drop_duplicates(subset=['Vuln ID'], inplace=True)
 
+# Scrape the Elastic Security Announcements page for Topics
+def scrape_elastic_security_topics():
+    url = "https://discuss.elastic.co/c/announcements/security-announcements/31"
+    response = session.get(url)
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Extract topics
+    topics = []
+    topic_list = soup.find_all('a', class_='title')
+    for topic in topic_list:
+        topic_title = topic.text.strip()
+        topic_link = "https://discuss.elastic.co" + topic['href']
+        topics.append([topic_title, topic_link])
+
+    return pd.DataFrame(topics, columns=['Topic Title', 'Link'])
+
+# Scrape the Elastic security announcements topics
+elastic_topics = scrape_elastic_security_topics()
+
 # Streamlit app
 st.title("CVE Search Results")
 
 # Display the table
 st.dataframe(all_data)
 
+# Display the Elastic Security Announcements topics table
+st.subheader("Elastic Security Announcements Topics")
+st.dataframe(elastic_topics)
+
 # Add search functionality
 search_term = st.text_input("Search in Summary:")
 if search_term:
     filtered_data = all_data[all_data['Summary'].str.contains(search_term, case=False)]
     st.dataframe(filtered_data)
-
-# Add functionality to view more details when a row is clicked (Updated)
-selected_rows = st.data_editor(all_data, num_rows="dynamic")
-if selected_rows is not None and not selected_rows.empty:
-    selected_vuln_id = selected_rows.iloc[0]['Vuln ID']
-    details = get_cve_details(selected_vuln_id)
-    st.write(f"Details for {selected_vuln_id}:")
-    st.json(details)
