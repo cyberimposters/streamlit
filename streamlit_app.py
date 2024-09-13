@@ -111,7 +111,7 @@ def scrape_elastic_security_topics():
     topic_list = soup.find_all('a', class_='title')
     for topic in topic_list:
         topic_title = topic.text.strip()
-        topic_link = "https://discuss.elastic.co" + topic['href']
+        topic_link = topic['href']
         topics.append([topic_title, topic_link])
 
     return pd.DataFrame(topics, columns=['Topic Title', 'Link'])
