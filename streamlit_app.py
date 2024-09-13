@@ -65,10 +65,10 @@ def scrape_nvd_page(url):
 
 # Define the search queries and their pagination limits
 queries = {
-    "elasticsearch": 100,  # Up to startIndex 80
-    "kibana": 100,         # Up to startIndex 60
-    "logstash": 100,       # Up to startIndex 20
-    "Oracle GraalVM for JDK": 100  # Up to startIndex 20, note the phrase queryType
+    "elasticsearch": 100,  # Up to startIndex 100
+    "kibana": 100,         # Up to startIndex 100
+    "logstash": 100,       # Up to startIndex 100
+    "Oracle GraalVM for JDK": 100  # Up to startIndex 100, note the phrase queryType
 }
 
 # Generate URLs based on queries and pagination
